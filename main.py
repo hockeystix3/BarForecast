@@ -8,6 +8,7 @@ from requests import post
 Whakatāne bar forecasting algorithm v2
 15th March 2022
 """
+#Google sheets setup
 scope = ['https://spreadsheets.google.com/feeds']
 creds = ServiceAccountCredentials.from_json_keyfile_name('sheetsAPI.json', scope)
 client = gspread.authorize(creds)
@@ -15,7 +16,6 @@ sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1orTLfEY34Vl2
 
 worksheet = sheet.add_worksheet(title=datetime.now().strftime("%d/%m/%Y %H:%M"), rows=50, cols=5)
 tides = open("Whakatāne 2022.csv", "r")
-bar = open("BarForecast.csv", "w")
 weather = open(datetime.now().strftime("%d%m%Y%H%M") + ".csv", "w")
 
 # Listing tides for the year. Format of date, tide 1 time, tide 1 height, tide 2 time etc.
@@ -52,7 +52,10 @@ resp = post('https://forecast-v2.metoceanapi.com/point/time',
             )
 
 def BarForecast(tidelist, resp):
+
     j = 0
+
+    #skipping overnight
     for i in range(56):
         if i % 8 == 0:
             j+=1
@@ -72,9 +75,24 @@ def BarForecast(tidelist, resp):
             wind_dir = 180
         else:
             wind_dir = resp.json()['variables']['wind.direction.at-10m']['data'][i]
-        period = resp.json()['variables']['wave.period.peak']['data'][i]
-        swell_height = resp.json()['variables']['wave.height']['data'][i]
-        swell_height2 = resp.json()['variables']['wave.height.above-8s']['data'][i]
+
+        if resp.json()['variables']['wave.period.peak']['data'][i] is None:
+            period = 5
+        else:
+            period = resp.json()['variables']['wave.period.peak']['data'][i]
+
+        if resp.json()['variables']['wave.height']['data'][i] is None:
+            if resp.json()['variables']['wave.height.above-8s']['data'][i] is not None:
+                swell_height = resp.json()['variables']['wave.height.above-8s']['data'][i]
+            else:
+                swell_height = 0.3
+        else:
+            swell_height = resp.json()['variables']['wave.height']['data'][i]
+
+        if resp.json()['variables']['wave.height.above-8s']['data'][i] is None:
+            swell_height2 = 0.3
+        else:
+            swell_height2 = resp.json()['variables']['wave.height.above-8s']['data'][i]
 #        swell_direction = line[7][:-1]
         tide = TideFinder(date, time, tidelist)
         depth = 2.2        # flood river flow
@@ -125,7 +143,6 @@ def BarForecast(tidelist, resp):
             j += 1
             weather.write(date.strftime("%d/%m/%Y")+","+time.strftime("%H:%M")+","+str(wind_speed)+","+str(wind_dir)+","+str(period)+","+str(swell_height)+","+str(swell_height2)+"\n")
             print(date, time, barScore, barScore2, barScore3)
-    bar.close()
     tides.close()
     weather.close()
 
